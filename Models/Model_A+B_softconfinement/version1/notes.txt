@@ -1,0 +1,2 @@
+This is an old version of the project a soft confinement system. Homopolymer A is confined between two parallel flats,
+ homopolymer B is grafted on two flats. these two kinds of chains have the same polymerization.

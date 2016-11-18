@@ -1,0 +1,223 @@
+#!/usr/bin/perl
+
+#########################################################################
+# xscft - Script for automatically submiting SCFT program
+#
+# FudanUniversity
+# Department of MacroMolecule Science,220 Handan Road, Shanghai, China.   
+#
+#
+#Revision by Yi-Xin Liu since 9.1.2010
+#version 3.0, 12/25/2011                                                  
+# 2010.12.29
+#   1. Read data and exe path from param.ini
+#   2. Add an option "n".
+# 2010.1.27
+#   1. Record simulation batch to $HOME/simulation/active_batch
+# 2011.1.28
+#   1. Reads nodes file before findCore each time.
+# 2011.3.23
+#   1. Add prog key "N"
+# 2011.12.25
+#   1. ini file handled by Config:Simple
+#   2. Support param.ini version 3.0
+#   3. Rename the script from "paramx" to "xscft"
+# 2012.01.05
+#   1. Find a bug. Config:Simple can only run at NODE "console"
+# 2012.04.19
+#   1. Update make path when param.ini has been updated
+#   2. Support param.ini version 5.0
+##########################################################################
+	
+	use Getopt::Std;
+	BEGIN{
+		push(@INC,$ENV{"HOME"}."/opt/lyx/perl");
+    }
+    use Config::Simple;
+    use Util;
+	use Node;
+    use POSIX qw/strftime/;
+
+	my %opt;
+	getopts("vhnt:",\%opt);
+	if(defined $opt{'v'}){
+		print "This is xscft 3.0, 12/25/2011.\n";
+		print "xscft is a perl script for automatically generating parameter files and submitting SCFT programs.\n\n";
+		print "Author: Yi-Xin Liu.\n";
+		print "Contact: liuyxpp at gmail.com.\n";
+		exit(0);
+	}
+	if(defined $opt{'h'}){
+		print "Available options are: -h -n -t -v.\n";
+		print "h: this page.\n";
+        print "n: if present, only generating param files, do not copy and submit exe.\n";
+		print "t: submit the program as a foreground job. If set, the program is submitted as a foreground job. If not set this flag, the program is submitted as a backgound job which is the preferred way.\n";
+		print "v: version.\n";
+        print "**Known Bugs: Find a bug. Config:Simple can only run at NODE console\n";
+		exit(0);
+	}
+	my $is_background=1;
+	$is_background=0 if defined $opt{'t'};
+	my $is_submit=1;
+	$is_submit=0 if defined $opt{'n'};
+
+	my $user=$ENV{"USER"};
+	my $pwd=$ENV{"PWD"};
+	my %pidNode; #key: PID; value: Node
+    my %vardict = ("p","alphaA","e","epsS","eA","epsA","f","fA","k","chiN","kAS","chiASN","kBS","chiBSN","s","cs","fC","phiC");
+
+	my $param_filename="param.ini";
+	if(!(-e $param_filename)){
+		print "Error: configuration file \"$param_filename\" is missing!\n";
+		print "The script is now aborted.\n";
+		exit(0);
+	}
+    $cfg = new Config::Simple($param_filename);
+
+    my $batchScript_key = "f";
+    foreach (keys %vardict){
+        $batchScript_key = $_
+            if($cfg->param("xscft.batchScriptVar") eq $_);
+    }
+
+    my $nodeFile = $cfg->param("xscft.nodeFile");
+    my @nodeList;
+    if(-e $nodeFile){
+        open FILE, $nodeFile;
+        @nodeList=<FILE>;
+        chomp @nodeList;
+        close FILE;
+    }
+    else{
+#       Update your own nodes here
+#       @nodeList=qw/c0101 c0102 c0103 c0104 c0105 c0106 c0107 c0108 c0109 c0110 c0111 c0112 c0113 c0114 c0115 c0116/;    
+	    @nodeList=qw/c0109 c0114/;
+    }
+    my $activeBatch =  $cfg->param("xscft.activeBatchPath");
+    my $timeStamp=strftime('%Y%m%d-%H%M%S',localtime);
+    $activeBatch.="batchdir-".$timeStamp;
+
+	my $batchProg_key=$cfg->param("Batch.name");
+	my $exe_filename=$cfg->param("xscft.exeName");
+	my $exe_filepath=$cfg->param("xscft.exePath");
+	my $data_filepath=$cfg->param("xscft.dataPath");
+    my $data_path_suffix=$cfg->param("xscft.dataPathSuffix");
+    my $is_field=$cfg->param("xscft.isInitField");
+    my $field_filename=$cfg->param("xscft.fieldName");
+    my $field_filepath=$cfg->param("xscft.fieldPath");
+	my $waitTime=$cfg->param("xscft.waitTime"); # seconds
+
+    if($is_submit){
+    if(!(-e $exe_filepath.$exe_filename)){
+		print "Error: the program \"$exe_filename\" is missing!\n";
+		print "The script is now aborted.\n";
+		exit(0);
+	}}
+
+    if($is_field){
+	if(!(-e $field_filepath."/".$field_filename)){
+		print "Error: field initialization file \"$field_filename\" is missing!\n";
+		print "The script is now aborted.\n";
+		exit(0);
+	}}
+
+	system "mkdir $data_filepath" unless -e $data_filepath;
+	my $dir_name1=$data_filepath;
+	foreach (sort keys %vardict){
+		if($_ ne $batchProg_key && $_ ne $batchScript_key){
+			$dir_name1.=$_;
+			$dir_name1.=$cfg->param("Model.".$vardict{$_});
+		}
+	}
+    $dir_name1.=$data_path_suffix;
+	system "mkdir $dir_name1" unless -e $dir_name1;#batch dir
+    system "cp param.ini $dir_name1/param.ini-$timeStamp";
+	
+	my $bp=$prog{$batchProg_key}; # batch variable name used by program
+	my $bs=$prog{$batchScript_key}; # batch variable name used by script
+    my $bs_min = $cfg->param("xscft.batchScriptMin");
+	my $bs_step=$cfg->param("xscft.batchScriptStep");
+	my $bs_max = $cfg->param("xscft.batchScriptMax");
+    my $small=1e-10;
+    my $runs=($bs_max - $bs_min + $small) / $bs_step;
+    my $bs_val;
+	for($i=0;$i<$runs;$i+=1){
+        $bs_val = $bs_min + $i * $bs_step;
+		my $dir_name2 = $dir_name1."/$vardict{$batchScript_key}".$bs_val;
+		my $exec_name = $batchScript_key.$bs_val;
+		foreach (sort keys %vardict){
+			if($_ ne $batchProg_key && $_ ne $batchScript_key){
+				$exec_name.=$_.$cfg->param("Model.".$vardict{$_});
+			}
+		}
+		system "mkdir $dir_name2" unless -e $dir_name2;
+        open FILE,">>".$activeBatch;
+            print FILE $dir_name2."\n";
+        close FILE;
+        if($is_submit){
+		    system "cp $exe_filepath/$exe_filename $dir_name2/$exec_name";
+        }
+        if($is_field){
+            system "cp $field_filepath/$field_filename $dir_name2/$field_filename";
+        }
+		chdir $dir_name2;
+        $cfg->param("Model.".$vardict{$batchScript_key},$bs_val);
+        $cfg->save($dir_name2+"/param.ini");
+		
+        if($is_submit){
+		my $freeNode=&findCore(@nodeList);
+		while(!$freeNode){
+			print "No free cores. Waiting for \033[1;36;49m[$waitTime]\033[m seconds to check again.\n";
+			print "\033[1;37;49m[xscft]\033[m is still running.";
+            $|=1;
+            my $t=0;
+            while($t<$waitTime){
+                print ".";
+                sleep 2;
+                $t+=2;
+            }
+            print "\n";
+            # node file can be changed during xscft is running
+            if(-e $nodeFile){
+                open FILE, $nodeFile;
+                @nodeList=<FILE>;
+                chomp @nodeList;
+                close FILE;
+            }
+			$freeNode=&findCore(@nodeList);
+		}
+		my $rsh="rsh $freeNode ";
+		my $cmd=$rsh;
+		if($is_background){
+			$cmd.="\"cd $dir_name2 && ./$exec_name > log &\"";
+		}
+		else{
+			$cmd.="\"cd $dir_name2 && ./$exec_name > log\"";
+		}
+		system "$cmd &";
+		sleep 1;
+		my $ps_cmd="ps -ef |grep $user |grep ./$exec_name |grep -v grep |grep -v bash |grep -v rsh |tr -s \" \" \" \" |cut -f2 -d \" \"";
+		$pid=`$rsh $ps_cmd`;
+		while(!($pid>0)){
+			sleep 1;
+			$pid=`$rsh $ps_cmd`;
+		}
+		chomp $pid;
+		$pidNode{$pid}=$freeNode;
+		print "$dir_name2/$exec_name was submitted to node \033[1;35;49m[$freeNode]\033[m with PID \033[1;32;49m$pid\033[m\n";
+        } # if is_submit
+
+		chdir $ENV{"PWD"};
+	}
+
+if($is_submit){
+open FILE, ">pid.node";
+foreach (keys %pidNode){
+	print FILE $_." ";
+	print FILE $pidNode{$_}." ";
+}
+close FILE;
+my $fpid="pid.node.".$bs_min.".".$bs_max;
+system "mv pid.node $dir_name1/$fpid";
+}
+

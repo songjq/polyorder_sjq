@@ -1,0 +1,30 @@
+polyorder Changelog
+===================
+
+Here you can see the full list of changes between each polyorder release.
+
+Version 0.4
+-----------
+
+* position dependent dielectric constant support.
+
+Version 0.3
+-----------
+
+* Charged block copolymer support.
+* position independent dielectric constant support.
+* Add job submission and monitoring script.
+
+Version 0.2
+-----------
+
+* Add non-orthogonal unit cell support.
+
+Version 0.1
+-----------
+
+* Basic functions.
+* Neutral block copolymers support.
+* Full periodic boundary condition support.
+* Orthogonal unit cell support.
+

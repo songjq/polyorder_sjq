@@ -1,0 +1,5 @@
+Program starts at:			Tue Sep  6 17:28:25 2016
+Program terminates at:			Tue Sep  6 17:30:25 2016
+Total time elapsed in second:	124.85
+Total time elapsed in minute:	2.08083
+Total time elapsed in hour:	0.0346806

@@ -1,0 +1,5 @@
+This is version2 of the soft confinement system. Homopolymer A is confined two parallel flats,
+ homopolymer C is grafted on two flats. In this version, a variable of 'legnth_ratio' is introduced,
+polymerization of grafted chain C is setted to be the standard length, the length of confined 
+homopolymer changes correspondingly, so the variable 'length_ratio' is the length ration of confined
+ homopolymer over grafted homopolymer.

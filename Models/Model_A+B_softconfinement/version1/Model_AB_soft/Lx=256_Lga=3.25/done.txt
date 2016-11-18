@@ -1,0 +1,5 @@
+Program starts at:			Sat May 30 19:07:51 2015
+Program terminates at:			Sat May 30 19:11:55 2015
+Total time elapsed in second:	3779.36
+Total time elapsed in minute:	62.9893
+Total time elapsed in hour:	1.04982

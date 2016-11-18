@@ -1,0 +1,83 @@
+BASEDIR = ../build
+MOUT = $(BASEDIR)/bin/ABSe_ps_mud_pbc
+TOUT = $(BASEDIR)/bin/test
+ODIR = $(BASEDIR)/src
+SDIR = ../src
+MODIR = $(BASEDIR)/main
+MSDIR = scft
+TODIR = $(BASEDIR)/tests
+TSDIR = .
+#LDIR = lib
+
+CC = g++ -O2 -Wall
+#CC = g++ -O3 -Wall
+#CC = g++ -O2 -pg -Wall
+#CC = g++ -O2 -pg -Wall -DBZ_ALIGN_BLOCKS_ON_CACHELINE_BOUNDARY
+#CC = g++ -g -Wall
+
+CFLAGS = -I../include
+CXXFLAGS =
+LDFLAGS =
+
+#VPATH = src include
+#vpath %.cpp src
+#vpath %.h include
+
+#LIBS = ~/opt/lyx/liblyx.a -lmud5 \
+	   -lmat -lfftw3 -lblitz -lm -lgfortran
+LIBS = ~/opt/lyx/liblyx.a -lmud5c -lf2c \
+	   -lmat -lfftw3 -lblitz -lm -lgfortran
+
+_OBJS = common.o \
+		Grid.o \
+		UnitCell.o \
+		multigrid.o \
+		MUD2D.o \
+		MUD3D.o \
+		FieldE.o \
+		Propagator.o \
+	   	PseudoSpectral.o \
+		Model_AB.o \
+	   	Model_ABSe.o \
+		Helper.o \
+	   	scft.o
+
+OBJS = $(patsubst %,$(ODIR)/%,$(_OBJS))
+
+#SRC = $(addsuffix .cc, $(basename $(_OBJS)))
+
+_MOBJS = ABSe_ps_mud_pbc.o
+
+MOBJS = $(patsubst %,$(MODIR)/%,$(_MOBJS))
+
+_TOBJS = test.o
+
+TOBJS = $(patsubst %,$(TODIR)/%,$(_TOBJS))
+
+$(ODIR)/%.o : $(SDIR)/%.cc
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(MODIR)/%.o : $(MSDIR)/%.cc
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(TODIR)/%.o : $(TSDIR)/%.cc
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(MOUT) : $(MOBJS) $(OBJS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+$(TOUT) : $(TOBJS) $(OBJS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+.PHONY: all
+all: $(MOUT)
+
+.PHONY: main
+main: $(MOUT)
+
+.PHONY: test
+test: $(TOUT)
+	
+.PHONY: clean
+clean:
+	rm -f $(ODIR)/*.o $(TODIR)/*.o $(MODIR)/*.o $(MOUT) $(TOUT)

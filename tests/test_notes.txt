@@ -1,0 +1,35 @@
+mud2sa in test_multigrid.cc
+max error: 0.000399351
+infinite norm of error: 0.000159499
+L2 norm of error: 0.000198131
+
+mud2sa in test_multigrid.cc
+max error: 0.00040555
+infinite norm of error: 0.000159823
+L2 norm of error: 0.000198129
+
+mud2sa_global in test_multigrid.cc
+max error: 0.000474691
+infinite norm of error: 0.000215956
+L2 norm of error: 0.000267487
+
+mud3sa_global in test_multigrid.cc
+max error: 0.0387982
+infinite norm of error: 0.00597747
+L2 norm of error: 0.00861378
+
+mud3sa in test_multigrid.cc
+max error: 0.0400817
+infinite norm of error: 0.00606039
+L2 norm of error: 0.00876616
+
+mud3sp in test_multigrid.cc
+max error: 0.00209586
+infinite norm of error: 0.000681997
+L2 norm of error: 0.000833941
+
+Model_ABSe in test.cc
+ceps 2D H = -38.770964 = 3.266879-42.037843
+veps 2D H = -38.761255 = 3.268907-42.030163
+ceps 3D H = -38.769711 = 3.268742-42.038453 
+veps 3D H = -38.760447 = 3.270577-42.031024

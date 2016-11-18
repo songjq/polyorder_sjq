@@ -1,0 +1,9 @@
+PolyOrder ToDo List
+===================
+
+* Using JSON configuration file instead of .ini file. To parse, use rapidjson.
+* Arbitrary fraction f by letting ds varying across blocks.
+* Asymetric block copolymers with different kuhn length segments.
+* Model for miktoarm polymers.
+
+
