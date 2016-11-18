@@ -73,6 +73,7 @@ void Model_AB::init(){
 }
 
 void Model_AB::update(){
+    blitz::Range all = blitz::Range::all();
     if(_cfg.algo_scft_type() == AlgorithmSCFTType::ANDERSON){
         qA->update(*wAx);
         qB->set_head( qA->get_tail() );
@@ -83,6 +84,46 @@ void Model_AB::update(){
         qAc->update(*wAx);
     }
     else{
+        CSimpleIniCaseA ini;
+        ini.LoadFile("./param.ini");
+        string confine_mold = ini.GetValue("Grid", "confine_mold");
+        if(_cfg.ctype() == ConfineType::NONE && confine_mold == "NBC_by_PBC") {
+            int Nx = phiA->Lx();
+            int Ny = phiA->Ly();
+            int Nz = phiA->Lz();
+            blitz::Array<double, 3> wa(wA->data());
+            blitz::Array<double, 3> wb(wB->data());
+            switch (_cfg.dim()) {
+                case 1 :
+                {
+                    blitz::Array<double, 3> w1(wa(Range(0, Nx/2-1), all, all));
+                    blitz::Array<double, 3> w2(wb(Range(0, Nx/2-1), all, all));
+                    wa(Range(Nx/2, Nx-1), all, all) = w1.reverse(blitz::firstDim);
+                    wb(Range(Nx/2, Nx-1), all, all) = w2.reverse(blitz::firstDim);
+                    break;
+                }
+                case 2 :
+                {
+                    blitz::Array<double, 3> w1(wa(all, Range(0, Ny/2-1), all));
+                    blitz::Array<double, 3> w2(wb(all, Range(0, Ny/2-1), all));
+                    wa(all, Range(Ny/2, Ny-1), all) = w1.reverse(blitz::secondDim);
+                    wb(all, Range(Ny/2, Ny-1), all) = w2.reverse(blitz::secondDim);
+                    break;
+                }
+                case 3 :
+                {
+                    blitz::Array<double, 3> w1(wa(all, all, Range(0, Nz/2-1)));
+                    blitz::Array<double, 3> w2(wb(all, all, Range(0, Nz/2-1)));
+                    wa(all, all, Range(Nz/2, Nz-1)) = w1.reverse(blitz::thirdDim);
+                    wb(all, all, Range(Nz/2, Nz-1)) = w2.reverse(blitz::thirdDim);
+                    break;
+                }
+                default :
+                    cout << "Please input correct dimension !" << endl;
+                    break;
+            }
+        }
+        
         qA->update(*wA);
         qB->set_head( qA->get_tail() );
         qB->update(*wB);
