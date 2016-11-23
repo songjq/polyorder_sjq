@@ -48,20 +48,6 @@ void Model_AB::init(){
     dsA = fA / LA;
     dsB = fB / LB;
 
-    //uword LA = fA / dsA;
-    //sA = LA + 1;
-    //uword LB = fB / dsB;
-    //sB = LB + 1;
-
-    //fA = 1.0 * LA / (LA + LB);
-    //fB = 1.0 * LB / (LA + LB);
-
-    //fA_shiftvalue = _cfg.get_double("Model","fA_shiftvalue");   //added by songjq in 20141103 
-    //fA = fA + fA_shiftvalue;                                   //added by songjq in 20141103
-    //fB = 1 - fA;                                               //added by songjq in 20141103
-    //dsA = fA / LA;                                             //added by songjq in 20141103
-    //dsB = fB / LB;                                             //added by songjq in 20141103
-
     vec lam = _cfg.lam();
     lamA = lam(0);
     lamB = lam(1);
@@ -84,9 +70,8 @@ void Model_AB::update(){
         qAc->update(*wAx);
     }
     else{
-        CSimpleIniCaseA ini;
-        ini.LoadFile("./param.ini");
-        string confine_mold = ini.GetValue("Grid", "confine_mold");
+    /****************************NBC by PBC****************************************/
+        string confine_mold = _cfg.get_string("Grid", "confine_mold");
         if(_cfg.ctype() == ConfineType::NONE && confine_mold == "NBC_by_PBC") {
             int Nx = phiA->Lx();
             int Ny = phiA->Ly();
@@ -123,7 +108,7 @@ void Model_AB::update(){
                     break;
             }
         }
-        
+    /********************************************************************************/    
         qA->update(*wA);
         qB->set_head( qA->get_tail() );
         qB->update(*wB);
