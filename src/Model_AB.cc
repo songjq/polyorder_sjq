@@ -4,6 +4,7 @@
 
 using namespace arma;
 using namespace std;
+using namespace blitz;
 
 Model_AB::Model_AB(const string config_file):Model(config_file){
     init();
@@ -21,6 +22,8 @@ void Model_AB::reset(const string& config_data){
 
 void Model_AB::init(){
     is_compressible = _cfg.is_compressible();
+    is_induced = _cfg.get_bool("Model", "is_induced");
+    confine_mold = _cfg.get_string("Grid", "confine_mold");
 
     vec vf = _cfg.f();
     fA = vf(0);
@@ -70,8 +73,6 @@ void Model_AB::update(){
         qAc->update(*wAx);
     }
     else{
-    /****************************NBC by PBC****************************************/
-        string confine_mold = _cfg.get_string("Grid", "confine_mold");
         if(_cfg.ctype() == ConfineType::NONE && confine_mold == "NBC_by_PBC") {
             int Nx = phiA->Lx();
             int Ny = phiA->Ly();
@@ -108,7 +109,6 @@ void Model_AB::update(){
                     break;
             }
         }
-    /********************************************************************************/    
         qA->update(*wA);
         qB->set_head( qA->get_tail() );
         qB->update(*wB);
@@ -150,8 +150,14 @@ void Model_AB::update(){
             wBx->update(C);
         }
         else{
-            wA->update( chiN * (*phiB) + eta );
-            wB->update( chiN * (*phiA) + eta );
+        	if(is_induced && confine_mold == "NBC_by_PBC" && _cfg.dim() == 3) {
+        		wA->update( chiN * (*phiB) - (*wH) + eta ); //chemical pattern or dot wets A block
+        	}
+        	else {
+            	wA->update( chiN * (*phiB) + eta );
+            }
+            wB->update( chiN * (*phiA) + eta );   //chemical pattern or dot is neutral to B block
+            
         }
     }
     else{
@@ -181,8 +187,13 @@ void Model_AB::update(){
         else{
             // For good convergence, yita must be updated before wA and wB.
             yita->update( (*phiA) + (*phiB) - 1.0 );
-            wA->update( chiN * (*phiB) + (*yita) );
-            wB->update( chiN * (*phiA) + (*yita) );
+            if(is_induced && confine_mold == "NBC_by_PBC" && _cfg.dim() == 3) {
+            	wA->update( chiN * (*phiB) - (*wH) + (*yita) );  //chemical pattern or dot wets A block
+            }
+            else {
+            	wA->update( chiN * (*phiB) + (*yita) );
+            }
+            wB->update( chiN * (*phiA) + (*yita) ); //chemical pattern or dot is neutral to B block
         }
     }
 }
@@ -197,10 +208,18 @@ double Model_AB::Hw() const{
             ret = g.quadrature();
         }
         else{
-            Grid g = chiN * (*phiA) * (*phiB) +
+        	if(is_induced && confine_mold == "NBC_by_PBC" && _cfg.dim() == 3) {
+        		Grid g = chiN * (*phiA) * (*phiB) +
+                     lamYita/2.0 * ((*phiA) + (*phiB) - 1.0) * ((*phiA) + (*phiB) - 1.0) -
+                     (*wH) * (*phiA) - (*wA) * (*phiA) - (*wB) * (*phiB);
+            	ret = g.quadrature();
+        	}
+        	else {
+        		Grid g = chiN * (*phiA) * (*phiB) +
                      lamYita/2.0 * ((*phiA) + (*phiB) - 1.0) * ((*phiA) + (*phiB) - 1.0) -
                      (*wA) * (*phiA) - (*wB) * (*phiB);
-            ret = g.quadrature();
+            	ret = g.quadrature();
+        	}
         }
     }
     else{
@@ -210,9 +229,16 @@ double Model_AB::Hw() const{
             ret = g.quadrature();
         }
         else{
-            Grid g = chiN * (*phiA) * (*phiB) -
+        	if(is_induced && confine_mold == "NBC_by_PBC" && _cfg.dim() == 3) {
+        		Grid g = chiN * (*phiA) * (*phiB) - (*wH) * (*phiA) - 
                      (*wA) * (*phiA) - (*wB) * (*phiB);
-            ret = g.quadrature();
+            	ret = g.quadrature();
+        	}
+        	else {
+        		Grid g = chiN * (*phiA) * (*phiB) -
+                     (*wA) * (*phiA) - (*wB) * (*phiB);
+            	ret = g.quadrature();
+        	}
         }
     }
     return ret;
@@ -253,13 +279,24 @@ double Model_AB::residual_error() const{
         double r, x, b;
         Grid g1, g2;
         if(!is_compressible){
-            // wA
-            g1 = chiN * (*phiB) + (*yita);
-            g2 = g1 - (*wA);
-            r = g2.abs_mean();
-            x = wA->abs_mean();
-            b = g1.abs_mean();
-            res += r / (x+b);
+        	if(is_induced && confine_mold == "NBC_by_PBC" && _cfg.dim() == 3) {
+        		// wA
+            	g1 = chiN * (*phiB) - (*wH) + (*yita);
+            	g2 = g1 - (*wA);
+            	r = g2.abs_mean();
+            	x = wA->abs_mean();
+            	b = g1.abs_mean();
+            	res += r / (x+b);
+        	}
+        	else {
+        		// wA
+            	g1 = chiN * (*phiB) + (*yita);
+            	g2 = g1 - (*wA);
+            	r = g2.abs_mean();
+            	x = wA->abs_mean();
+            	b = g1.abs_mean();
+            	res += r / (x+b);
+        	}
             // wB
             g1 = chiN * (*phiA) + (*yita);
             g2 = g1 - (*wB);
@@ -277,13 +314,24 @@ double Model_AB::residual_error() const{
             res /= 3.0;
         }
         else{
-            // wA
-            g1 = chiN * (*phiB) + lamYita * ((*phiA) + (*phiB) - 1.0);
-            g2 = g1 - (*wA);
-            r = g2.abs_quadrature();
-            x = wA->abs_quadrature();
-            b = g1.abs_quadrature();
-            res += r / (x+b);
+        	if(is_induced && confine_mold == "NBC_by_PBC" && _cfg.dim() == 3) {
+        		// wA
+            	g1 = chiN * (*phiB) -(*wH) + lamYita * ((*phiA) + (*phiB) - 1.0);
+            	g2 = g1 - (*wA);
+            	r = g2.abs_quadrature();
+            	x = wA->abs_quadrature();
+            	b = g1.abs_quadrature();
+            	res += r / (x+b);
+        	}
+        	else {
+        		// wA
+            	g1 = chiN * (*phiB) + lamYita * ((*phiA) + (*phiB) - 1.0);
+            	g2 = g1 - (*wA);
+            	r = g2.abs_quadrature();
+            	x = wA->abs_quadrature();
+            	b = g1.abs_quadrature();
+            	res += r / (x+b);
+        	}
             // wB
             g1 = chiN * (*phiA) + lamYita * ((*phiA) + (*phiB) - 1.0);
             g2 = g1 - (*wB);
@@ -353,8 +401,6 @@ void Model_AB::display() const{
     cout.precision(6);
 }
 
-
-
 void Model_AB::save(const string file){
     phiA->uc().save(file, phiA->Lx(), phiA->Ly(), phiA->Lz());
     save_field(file);
@@ -369,6 +415,8 @@ void Model_AB::save_field(const string file){
     else{
         wA->save(file);
         wB->save(file);
+        if(is_induced && confine_mold == "NBC_by_PBC" && _cfg.dim() == 3)
+        	wH->save(file);
     }
     if(!is_compressible)
         yita->save(file);
@@ -467,6 +515,8 @@ void Model_AB::release_memory(){
     else{
         delete wA;
         delete wB;
+        if(is_induced && confine_mold == "NBC_by_PBC" && _cfg.dim() == 3)
+        	delete wH;
     }
     if(!is_compressible)
         delete yita;
@@ -551,7 +601,6 @@ void Model_AB::init_pattern_field(){
     }
 }
 
-
 void Model_AB::init_field(){
     switch(_cfg.get_grid_init_type()){
         case GridInitType::RANDOM_INIT:
@@ -565,6 +614,9 @@ void Model_AB::init_field(){
             break;
         case GridInitType::PATTERN_INIT:
             init_pattern_field();
+        case GridInitType::DATA_INIT:  // added by songjq for string method in 20161001
+            cout << "Data initialization now!" << endl;
+            //init_data_field();
             break;
         default:
             cerr<<"Unkonwn or unsupported grid init type!"<<endl;
@@ -572,6 +624,23 @@ void Model_AB::init_field(){
     }
     if(!is_compressible)
         yita = new Yita("yita", _cfg, lamYita);  // No special initialization
+
+    if(is_induced && confine_mold == "NBC_by_PBC" && _cfg.dim() == 3) {   //define chemical pattern or dot field
+    	blitz::Range all = blitz::Range::all();
+    	int Nx = _cfg.Lx();
+    	int Ny = _cfg.Ly();
+    	int Nz = _cfg.Lz();
+    	Array<double, 2> data(Nx, Ny, blitz::fortranArray);
+    	CMatFile mat;
+    	mat.matInit("wH.mat", "r");   //read in 2D field
+    		mat.matGetArray("wH", data.data(), data.size()*sizeof(double));
+    		mat.matRelease();
+        Array<double, 3> wh(Nx, Ny, Nz);
+        data *= 2;
+        wh(all, all, 0) = data;
+        wh(all, all, Nz-1) = data;  //the chemical pattern or dot is defined by delta function from LWH, PRL, 2014
+        wH = new Field("wH", _cfg, wh, 2);
+    }
 }
 
 void Model_AB::init_density(){

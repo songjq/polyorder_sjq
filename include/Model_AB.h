@@ -83,6 +83,8 @@ private:
 
 private:
     bool is_compressible;
+    bool is_induced; //induced by chemical pattern or dot
+    string confine_mold; //judge NBC_by_PBC or not
     double fA, fB;      // fA=1-fB=NA/N
     double aA, aB;      // segment length
     double chiN;        // Flory-Huggins interation parameters
@@ -96,8 +98,8 @@ private:
     Yita *yita;         // will not be initialized for compressible model
     Density *phiA, *phiB;
     Propagator *qA, *qB, *qAc, *qBc;
-
     Updater *ppropupA, *ppropupB;
+    Field *wH;      //chemical pattern or dot on up&bottom substrates
 };
 
 #endif
