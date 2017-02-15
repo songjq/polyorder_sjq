@@ -357,6 +357,8 @@ double Model_AB::density_error() const{
 
 void Model_AB::display() const{
     cout<<"\tUnit Cell: "<<phiA->uc().type()<<endl;
+    if(_cfg.ctype() == ConfineType::NONE && confine_mold == "NBC_by_PBC")
+    	cout << "\tNBC by PBC" << endl;
     cout.setf(ios::fixed, ios::floatfield);
     cout.precision(4);
     cout<<"\t(lx,ly,lz) = ";

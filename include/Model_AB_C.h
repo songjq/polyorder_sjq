@@ -85,6 +85,7 @@ private:
 
 private:
     bool is_compressible;
+    string confine_mold; //judge NBC_by_PBC or not
     /*C denotes brush chain while A is free chain chain. so fC was defined to be volume fraction of brush chain with fC=1-fA*/
     double C = 1.0;
     double QAB, QC;
