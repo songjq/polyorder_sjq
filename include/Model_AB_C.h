@@ -53,6 +53,7 @@ public:
 
     void init();
     void reset(const string& config_data);
+    //void resetInStringABC(int s, int Lx, int Ly, int Lz, blitz::Array<double, 3> &w1, blitz::Array<double, 3> &w2, blitz::Array<double, 3> &w3);
 
     void update();
     double Hw() const;
@@ -61,6 +62,7 @@ public:
     double incomp() const;
     double residual_error() const;
     double density_error() const;
+    //blitz::Array<double, 4> output_data(); //added by songjq for string method in 20161008
 
     void display() const;
     void display_parameters() const;
@@ -69,6 +71,10 @@ public:
     void save_field(const string file);
     void save_density(const string file);
     void save_q(const string file);
+    //void input_AField(blitz::Array<double, 3>); //added by songjq for string method in 20161008
+    //void input_BField(blitz::Array<double, 3>); //added by songjq for string method in 20161008
+    //void input_CField(blitz::Array<double, 3>); //added by songjq for string method in 20161008
+    //void release_memory_string();  //to be compatible with Model_AB
 
     ~Model_AB_C();
 
@@ -79,26 +85,28 @@ private:
     void init_constant_field();
     void init_file_field();
     void init_pattern_field();
+    //void init_data_field(); //added by songjq for string method in 20161008
     void init_density();
     void init_propagator();
     void release_memory();
 
 private:
     bool is_compressible;
-    string confine_mold; //judge NBC_by_PBC or not
     /*C denotes brush chain while A is free chain chain. so fC was defined to be volume fraction of brush chain with fC=1-fA*/
     double C = 1.0;
+    double eps = 1.0; //length of brush chain
     double QAB, QC;
-    double Fc, Eab, Eacb, S_C, S_AB, S_ABconf, S_ABtrans, S_AB_pure, S_AB_incomp;
-    double sigma, eps;
+    double sigma;
     double fA, fB, fC;  // fA and fB is relative volume fraction of copolymer with fA+fB=1.0;fC is volume fraction of brush homopolymer in whole system       
     double aA, aB, aC;      // segment length
     double chiNab, chiNac, chiNbc;        // Flory-Huggins interation parameters
     double dsA, dsB, dsC;    // dsA=dsB and dsC is time step of free and brush chain 
     double lamA, lamB, lamC, lamYita;
+    double LamA, LamB, LamC; // coefficients for short-range potential
     arma::uword sA, sB, sC;   //here sA+sB and sC means length of free and brush chains
+    //blitz::Array<double, 3> waa, wbb, wcc; //added by songjq for string method in 20161008
 
-    Field *wA, *wB, *wC;     // will not be initialized for Anderson mixing
+    Field *wA, *wB, *wC, *wH;     // will not be initialized for Anderson mixing, *wH timed multiplied by a different factors is short-range potential for A, B, C
     FieldAX *wAx, *wBx, *wCx;   // will not be initialized for non-Anderson mixing
     Yita *yita;         // will not be initialized for compressible model
     Density *phiA, *phiB, *phiC;

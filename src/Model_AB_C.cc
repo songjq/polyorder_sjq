@@ -20,11 +20,30 @@ void Model_AB_C::reset(const string& config_data){
     init();
 }
 
+/*void Model_AB_C::resetInStringABC(int s, int Lx, int Ly, int Lz, blitz::Array<double, 3> &w1, blitz::Array<double, 3> &w2, blitz::Array<double, 3> &w3){
+    _cfg.set_grid_init_type(GridInitType::DATA_INIT);
+    delete wA;
+    delete wB;
+    delete wC;
+    waa.resize(Lx, Ly, Lz);
+    wbb.resize(Lx, Ly, Lz);
+    wcc.resize(Lx, Ly, Lz);
+    waa = w1;
+    wbb = w2;
+    wcc = w3;
+    init_field();
+}*/
+
 void Model_AB_C::init(){
 	blitz::Range all = blitz::Range::all();
     is_compressible = _cfg.is_compressible();
     eps = _cfg.get_double("Model","eps");
-    confine_mold = _cfg.get_string("Grid", "confine_mold");
+    LamA = _cfg.get_double("Model","LamA");
+    LamB = _cfg.get_double("Model","LamB");
+    LamC = _cfg.get_double("Model","LamC");
+    LamA = 0;
+    LamB = 0;
+    LamC = 0;
 
     vec vf = _cfg.f();
     fA = vf(0);
@@ -85,52 +104,6 @@ void Model_AB_C::init(){
 
 void Model_AB_C::update(){
     blitz::Range all = blitz::Range::all();
-
-    if(_cfg.ctype() == ConfineType::NONE && confine_mold == "NBC_by_PBC") {
-    	int Nx = phiA->Lx();
-        int Ny = phiA->Ly();
-        int Nz = phiA->Lz();
-        blitz::Array<double, 3> wa(wA->data());
-        blitz::Array<double, 3> wb(wB->data());
-        blitz::Array<double, 3> wc(wC->data());
-
-        switch (_cfg.dim()) {
-                case 1 :
-                {
-                    blitz::Array<double, 3> w1(wa(Range(0, Nx/2-1), all, all));
-                    blitz::Array<double, 3> w2(wb(Range(0, Nx/2-1), all, all));
-                    blitz::Array<double, 3> w3(wc(Range(0, Nx/2-1), all, all));
-                    wa(Range(Nx/2, Nx-1), all, all) = w1.reverse(blitz::firstDim);
-                    wb(Range(Nx/2, Nx-1), all, all) = w2.reverse(blitz::firstDim);
-                    wc(Range(Nx/2, Nx-1), all, all) = w3.reverse(blitz::firstDim);
-                    break;
-                }
-                case 2 :
-                {
-                    blitz::Array<double, 3> w1(wa(all, Range(0, Ny/2-1), all));
-                    blitz::Array<double, 3> w2(wb(all, Range(0, Ny/2-1), all));
-                    blitz::Array<double, 3> w3(wc(all, Range(0, Ny/2-1), all));
-                    wa(all, Range(Ny/2, Ny-1), all) = w1.reverse(blitz::secondDim);
-                    wb(all, Range(Ny/2, Ny-1), all) = w2.reverse(blitz::secondDim);
-                    wc(all, Range(Ny/2, Ny-1), all) = w3.reverse(blitz::secondDim);
-                    break;
-                }
-                case 3 :
-                {
-                    blitz::Array<double, 3> w1(wa(all, all, Range(0, Nz/2-1)));
-                    blitz::Array<double, 3> w2(wb(all, all, Range(0, Nz/2-1)));
-                    blitz::Array<double, 3> w3(wc(all, all, Range(0, Nz/2-1)));
-                    wa(all, all, Range(Nz/2, Nz-1)) = w1.reverse(blitz::thirdDim);
-                    wb(all, all, Range(Nz/2, Nz-1)) = w2.reverse(blitz::thirdDim);
-                    wc(all, all, Range(Nz/2, Nz-1)) = w3.reverse(blitz::thirdDim);
-                    break;
-                }
-                default :
-                    cout << "Please input correct dimension !" << endl;
-                    break;
-            }
-    }
-
     qA->update(*wA);
     qB->set_head( qA->get_tail() );
     qB->update(*wB);
@@ -147,16 +120,11 @@ void Model_AB_C::update(){
     blitz::thirdIndex k;
     switch(_cfg.dim()) {
         case 1:
-        {   
+        {
             blitz::Array<double, 1> data1(delta(all, 0, 0)*qcc(sC-1, all, 0, 0));
-            if(_cfg.ctype() == ConfineType::NONE && confine_mold == "NBC_by_PBC") {
-                QC = blitz::mean(data1);
-            } 
-            else {
-                arma::vec v(data1.data(), _cfg.Lx());
-                Cheb cheb(_cfg.Lx());
-                QC = 0.5 * cheb.quadrature_clencurt(v); //Notice:QC here is already normalized.
-            }
+            arma::vec v(data1.data(), _cfg.Lx());
+            Cheb cheb(_cfg.Lx());
+            QC = 0.5 * cheb.quadrature_clencurt(v); //Notice:QC here is already normalized.
 
             for(int i=0; i<_cfg.Lx(); ++i) 
                 qc(0, i, all, all) = sigma * delta(i, all, all) / (QC*_cfg.a()); //delta only deplict half dirac function, should times 2.0
@@ -165,16 +133,11 @@ void Model_AB_C::update(){
         case 2:
         {
             blitz::Array<double, 2> data2(delta(all, all, 0) * qcc(sC-1, all, all, 0));
-            if(_cfg.ctype() == ConfineType::NONE && confine_mold == "NBC_by_PBC") {
-                QC = blitz::mean(data2);
-            }
-            else {
-                blitz::Array<double, 1> data1(_cfg.Ly());
-                data1 = blitz::mean(data2(j,i),j);
-                arma::vec v(data1.data(), _cfg.Ly());
-                Cheb cheb(_cfg.Ly());
-                QC = 0.5 * cheb.quadrature_clencurt(v);
-            }            
+            blitz::Array<double, 1> data1(_cfg.Ly());
+            data1 = blitz::mean(data2(j,i),j);
+            arma::vec v(data1.data(), _cfg.Ly());
+            Cheb cheb(_cfg.Ly());
+            QC = 0.5 * cheb.quadrature_clencurt(v);
 
             for(int j=0; j<_cfg.Ly(); ++j)
                 qc(0, all, j, all) = sigma * delta(all, j, all) / (QC*_cfg.b());
@@ -183,19 +146,13 @@ void Model_AB_C::update(){
         case 3:
         {
             blitz::Array<double, 3> data3(delta(all, all, all) * qcc(sC-1,all,all,all));
-            if(_cfg.ctype() == ConfineType::NONE && confine_mold == "NBC_by_PBC") {
-                QC = blitz::mean(data3);
-            }
-            else {
-                blitz::Array<double, 2> data2(_cfg.Lx(), _cfg.Lz());
-                blitz::Array<double, 1> data1(_cfg.Lz());
-                data2 = blitz::mean(data3(i,k,j),k);
-                data1 = blitz::mean(data2(j,i),j);
-                arma::vec v(data1.data(), _cfg.Lz());
-                Cheb cheb(_cfg.Lz());
-                QC = 0.5 * cheb.quadrature_clencurt(v);
-            }
-            
+            blitz::Array<double, 2> data2(_cfg.Lx(), _cfg.Lz());
+            blitz::Array<double, 1> data1(_cfg.Lz());
+            data2 = blitz::mean(data3(i,k,j),k);
+            data1 = blitz::mean(data2(j,i),j);
+            arma::vec v(data1.data(), _cfg.Lz());
+            Cheb cheb(_cfg.Lz());
+            QC = 0.5 * cheb.quadrature_clencurt(v);
 
             for(int k=0; k<_cfg.Lz(); ++k)
                 qc(0, all, all, k) = sigma * delta(all, all, k) / (QC*_cfg.c());
@@ -204,7 +161,6 @@ void Model_AB_C::update(){
         default:
             break;
     }
-
     qC->update(*wC);
     QAB = qB->Qt();
     phiA->set_cc((1.0-fC)/QAB); //QAB should be ignored for better convergence
@@ -217,15 +173,15 @@ void Model_AB_C::update(){
     phiC->update(*qC, *qCc);
 
     if(is_compressible) {
-        wA->update( chiNac * (*phiC) + chiNab * (*phiB)  + lamYita*((*phiA)+(*phiB)+(*phiC)-1.0) );
-        wB->update( chiNab * (*phiA) + chiNbc * (*phiC)  + lamYita*((*phiA)+(*phiB)+(*phiC)-1.0) );
-        wC->update( chiNac * (*phiA) + chiNbc * (*phiB)  + lamYita*((*phiA)+(*phiB)+(*phiC)-1.0) ); 
+        wA->update( chiNac * (*phiC) + chiNab * (*phiB) + LamA * (*wH) + lamYita*((*phiA)+(*phiB)+(*phiC)-1.0) );
+        wB->update( chiNab * (*phiA) + chiNbc * (*phiC) + LamB * (*wH) + lamYita*((*phiA)+(*phiB)+(*phiC)-1.0) );
+        wC->update( chiNac * (*phiA) + chiNbc * (*phiB) + LamC * (*wH) + lamYita*((*phiA)+(*phiB)+(*phiC)-1.0) ); 
     } 
     else {
         yita->update( (*phiA) + (*phiB) + (*phiC) - 1.0 );
-        wA->update( chiNac * (*phiC) + chiNab * (*phiB)  + (*yita) );
-        wB->update( chiNab * (*phiA) + chiNbc * (*phiC)  + (*yita) );
-        wC->update( chiNac * (*phiA) + chiNbc * (*phiB)  + (*yita) );
+        wA->update( chiNac * (*phiC) + chiNab * (*phiB) + LamA * (*wH) + (*yita) );
+        wB->update( chiNab * (*phiA) + chiNbc * (*phiC) + LamB * (*wH) + (*yita) );
+        wC->update( chiNac * (*phiA) + chiNbc * (*phiB) + LamC * (*wH) + (*yita) );
     }
      
 /**********************segment density****************************************/  
@@ -251,11 +207,13 @@ double Model_AB_C::Hw() const{
     if(is_compressible){
         Grid g = chiNac * (*phiA) * (*phiC) + chiNab * (*phiA) * (*phiB) + chiNbc * (*phiB) * (*phiC)
                  + lamYita/2.0 * ((*phiA) + (*phiB) + (*phiC) - 1.0) * ((*phiA) + (*phiB) + (*phiC) - 1.0)
+                 + LamA * (*wH) * (*phiA) + LamB * (*wH) * (*phiB) + LamC * (*wH) * (*phiC)
                  - (*wA) * (*phiA) - (*wB) * (*phiB) - (*wC) * (*phiC);
         ret = g.quadrature();
     }
     else {
         Grid g = chiNac * (*phiA) * (*phiC) + chiNab * (*phiA) * (*phiB) + chiNbc * (*phiB) * (*phiC)
+                 + LamA * (*wH) * (*phiA) + LamB * (*wH) * (*phiB) + LamC * (*wH) * (*phiC)
                  - (*wA) * (*phiA) - (*wB) * (*phiB) - (*wC) * (*phiC) +(*yita) * ((*phiA)+(*phiB)+(*phiC)-1.0) ;
         ret = g.quadrature();
     }
@@ -284,21 +242,21 @@ double Model_AB_C::residual_error() const{
 
     if(is_compressible) {
         // wA
-        g1 = chiNac * (*phiC) + chiNab * (*phiB) + lamYita*((*phiA)+(*phiB)+(*phiC)-1.0);
+        g1 = chiNac * (*phiC) + chiNab * (*phiB) + LamA * (*wH) + lamYita*((*phiA)+(*phiB)+(*phiC)-1.0);
         g2 = g1 - (*wA);
         r = g2.abs_mean();
         x = wA->abs_mean();
         b = g1.abs_mean();
         res += r / (x+b);
         // wB
-        g1 = chiNab * (*phiA) + chiNbc * (*phiC) + lamYita*((*phiA)+(*phiB)+(*phiC)-1.0);
+        g1 = chiNab * (*phiA) + chiNbc * (*phiC) + LamB * (*wH) + lamYita*((*phiA)+(*phiB)+(*phiC)-1.0);
         g2 = g1 - (*wB);
         r = g2.abs_mean();
         x = wB->abs_mean();
         b = g1.abs_mean();
         res += r / (x+b);
         // wC
-        g1 = chiNac * (*phiA) + chiNbc * (*phiB)  + lamYita*((*phiA)+(*phiB)+(*phiC)-1.0);
+        g1 = chiNac * (*phiA) + chiNbc * (*phiB) + LamC * (*wH) + lamYita*((*phiA)+(*phiB)+(*phiC)-1.0);
         g2 = g1 - (*wC);
         r = g2.abs_mean();
         x = wC->abs_mean();
@@ -309,21 +267,21 @@ double Model_AB_C::residual_error() const{
     }
     else {
         // wA
-        g1 = chiNac * (*phiC) + chiNab * (*phiB) + (*yita);
+        g1 = chiNac * (*phiC) + chiNab * (*phiB) + LamA * (*wH) + (*yita);
         g2 = g1 - (*wA);
         r = g2.abs_mean();
         x = wA->abs_mean();
         b = g1.abs_mean();
         res += r / (x+b);
         // wB
-        g1 = chiNab * (*phiA) + chiNbc * (*phiC) + (*yita);
+        g1 = chiNab * (*phiA) + chiNbc * (*phiC) + LamB * (*wH) + (*yita);
         g2 = g1 - (*wB);
         r = g2.abs_mean();
         x = wB->abs_mean();
         b = g1.abs_mean();
         res += r / (x+b);
         // wC
-        g1 = chiNac * (*phiA) + chiNbc * (*phiB) + (*yita);
+        g1 = chiNac * (*phiA) + chiNbc * (*phiB) + LamC * (*wH) + (*yita);
         g2 = g1 - (*wC);
         r = g2.abs_mean();
         x = wC->abs_mean();
@@ -385,6 +343,19 @@ void Model_AB_C::display() const{
     cout.precision(6);
 }
 
+/*blitz::Array<double, 4> Model_AB_C::output_data() {
+    blitz::Range all = blitz::Range::all();
+    blitz::Array<double, 4> dataSave(6, _cfg.Lx(), _cfg.Ly(), _cfg.Lz());
+    dataSave(0, all, all, all) = wA->data();
+    dataSave(1, all, all, all) = wB->data();
+    dataSave(2, all, all, all) = wC->data();
+    dataSave(3, all, all, all) = phiA->data();
+    dataSave(4, all, all, all) = phiB->data();
+    dataSave(5, all, all, all) = phiC->data();
+
+    return dataSave;
+}*/
+
 void Model_AB_C::save(const string file){
     phiA->uc().save(file, phiA->Lx(), phiA->Ly(), phiA->Lz());
     save_field(file);
@@ -395,6 +366,7 @@ void Model_AB_C::save_field(const string file){
     wA->save(file);
     wB->save(file);
     wC->save(file);
+    wH->save(file); //LamABC *wH is the true short-range potential
     if(!is_compressible)
         yita->save(file);
 }
@@ -488,7 +460,7 @@ void Model_AB_C::display_parameters() const{
     cout<<"chiNab = "<<chiNab<<"\tchiNac = "<<chiNac<<"\tchiNbc = "<<chiNbc<<endl;
     cout<<"aA = "<<aA<<"\taB = "<<aB<<"\taC = "<<aC<<endl;
     cout<<"dsA = "<<dsA<<"\tdsB = "<<dsB<<"\tdsC = "<<dsC<<endl;
-    cout<<"sA = "<<sA<<"\tsB = "<<sB<<"\tsC = "<<sC<<endl;
+    cout<<"sA = "<<sA<<"\tsB = "<<sB<<"\tsB = "<<sC<<endl;
     if(_cfg.algo_scft_type() == AlgorithmSCFTType::ANDERSON)
         cout<<"seedA = "<<wAx->seed()<<"\tseedC = "<<wCx->seed()<<endl;
     else
@@ -515,6 +487,7 @@ void Model_AB_C::release_memory(){
         delete wA;
         delete wB;
         delete wC;
+        delete wH;
     }
     if(!is_compressible)
         delete yita;
@@ -536,6 +509,38 @@ void Model_AB_C::release_memory(){
     }
 }
 
+/*void Model_AB_C::release_memory_string(){
+    if(_cfg.algo_scft_type() == AlgorithmSCFTType::ANDERSON){
+        delete wAx;
+        delete wBx;
+        delete wCx;
+    }
+    else{
+        delete wA;
+        delete wB;
+        delete wC;
+        delete wH;
+    }
+    if(!is_compressible)
+        delete yita;
+    delete phiA;
+    delete phiB;
+    delete phiC;
+    delete qA;
+    delete qB;
+    delete qC;
+    delete qAc;
+    delete qBc;
+    delete qCc;
+    if(_cfg.ctype() != ConfineType::NONE
+       || (_cfg.algo_mde_type() == AlgorithmMDEType::ETDRK4
+           && _cfg.etdrk4_M() > 0)){
+        delete ppropupA;
+        delete ppropupB;
+        delete ppropupC;
+    }
+}*/
+
 Model_AB_C::~Model_AB_C(){
     release_memory();
 }
@@ -555,27 +560,15 @@ void Model_AB_C::init_delta(){
         {                              // brackets is necessary for initialization in switch case
             blitz::Array<double, 1> x(Lx);
             blitz::Array<double, 1> arr(Lx);
-
-            if(_cfg.ctype() == ConfineType::NONE && confine_mold == "NBC_by_PBC") {  //unifrom grids
-                x = 1.0*i/(Lx-1)*(_cfg.a());
-                delta.resize(Lx, Ly, Lz);
-                arr = 1.0/sqrt(2.0*kPI*alpha) * exp(-pow2(x)/2/alpha)/2;
-                blitz::Array<double, 1> tmparr(arr(Range(0, int(Lx/2-1))));
-                arr(Range(Lx-1-int(Lx/2-1), Lx-1)) = tmparr.reverse(blitz::firstDim);
-            }
-            else {                     //CGL grids
-                x = cos(kPI*i/(Lx-1));
-                x = 0.5 * (1-x) * (_cfg.a());
-                delta.resize(Lx, Ly, Lz);
-                arr = 1.0/sqrt(2.0*kPI*alpha) * exp(-pow2(x)/2/alpha)/2;// + x*x*exp(-_cfg.a()*_cfg.a()/2/alpha)/(2*alpha*sqrt(2.0*kPI*alpha));
-                //should divide 2 in arr
-                /*****************brush grafted onto both flats************************/
-                //arr = arr / 2.0;         
-                //blitz::Array<double, 1> tmparr(arr(Range(0, int(Lx/2-1))));
-                //arr(Range(Lx-1-int(Lx/2-1), Lx-1)) = tmparr.reverse(blitz::firstDim);
-                /**********************************************************************/
-            }
-
+            x = cos(kPI*i/(Lx-1));
+            x = 0.5 * (1-x) * (_cfg.a());
+            delta.resize(Lx, Ly, Lz);
+            arr = 1.0/sqrt(2.0*kPI*alpha) * exp(-pow2(x)/2/alpha);// + x*x*exp(-_cfg.a()*_cfg.a()/2/alpha)/(2*alpha*sqrt(2.0*kPI*alpha));
+            /*****************brush grafted onto both flats************************/
+            //arr = arr / 2.0;         
+            //blitz::Array<double, 1> tmparr(arr(Range(0, int(Lx/2-1))));
+            //arr(Range(Lx-1-int(Lx/2-1), Lx-1)) = tmparr.reverse(blitz::firstDim);
+            /**********************************************************************/
             for(int i=0; i<Lx; ++i)   delta(i, all, all) = arr(i);
 
             break;
@@ -584,24 +577,13 @@ void Model_AB_C::init_delta(){
         {                              
             blitz::Array<double, 1> y(Ly);
             blitz::Array<double, 1> arr(Ly);
-
-            if(_cfg.ctype() == ConfineType::NONE && confine_mold == "NBC_by_PBC") {
-            	y = 1.0*i/(Ly-1)*(_cfg.b());
-            	delta.resize(Lx, Ly, Lz);
-            	arr = 1.0/sqrt(2.0*kPI*alpha) * exp(-pow2(y)/2/alpha)/2;        
-            	blitz::Array<double, 1> tmparr(arr(Range(0, int(Ly/2-1))));
-            	arr(Range(Ly-1-int(Ly/2-1), Ly-1)) = tmparr.reverse(blitz::firstDim);
-            }
-            else {
-            	y = cos(kPI*i/(Ly-1));        //notice the index is i not j
-            	y = 0.5 * (1-y) * (_cfg.b());
-            	delta.resize(Lx, Ly, Lz);
-            	arr = 1.0/sqrt(2.0*kPI*alpha) * exp(-pow2(y)/2/alpha)/2;// + y*y*exp(-_cfg.b()*_cfg.b()/2/alpha)/(2*alpha*sqrt(2.0*kPI*alpha)); 
-            	//arr = arr / 2.0;         
-            	//blitz::Array<double, 1> tmparr(arr(Range(0, int(Ly/2-1))));
-            	//arr(Range(Ly-1-int(Ly/2-1), Ly-1)) = tmparr.reverse(blitz::firstDim);
-            }
-            
+            y = cos(kPI*i/(Ly-1));        //notice the index is i not j
+            y = 0.5 * (1-y) * (_cfg.b());
+            delta.resize(Lx, Ly, Lz);
+            arr = 1.0/sqrt(2.0*kPI*alpha) * exp(-pow2(y)/2/alpha);// + y*y*exp(-_cfg.b()*_cfg.b()/2/alpha)/(2*alpha*sqrt(2.0*kPI*alpha)); 
+            //arr = arr / 2.0;         
+            //blitz::Array<double, 1> tmparr(arr(Range(0, int(Ly/2-1))));
+            //arr(Range(Ly-1-int(Ly/2-1), Ly-1)) = tmparr.reverse(blitz::firstDim);
             for(int j=0; j<Ly; ++j)   delta(all, j, all) = arr(j);
             break;
         }
@@ -609,24 +591,13 @@ void Model_AB_C::init_delta(){
         {                              
             blitz::Array<double, 1> z(Lz);
             blitz::Array<double, 1> arr(Lz);
-
-            if(_cfg.ctype() == ConfineType::NONE && confine_mold == "NBC_by_PBC") {
-            	z = 1.0*i/(Lz-1)*(_cfg.c());
-            	delta.resize(Lx, Ly, Lz);
-            	arr = 1.0/sqrt(2.0*kPI*alpha) * exp(-pow2(z)/2/alpha)/2;      
-            	blitz::Array<double, 1> tmparr(arr(Range(0, int(Lz/2-1))));
-            	arr(Range(Lz-1-int(Lz/2-1), Lz-1)) = tmparr.reverse(blitz::firstDim);
-            }
-            else {
-            	z = cos(kPI*i/(Lz-1));        //notice the index is i not j
-            	z = 0.5 * (1-z) * (_cfg.c());
-            	delta.resize(Lx, Ly, Lz);
-            	arr = 1.0/sqrt(2.0*kPI*alpha) * exp(-pow2(z)/2/alpha)/2;// + z*z*exp(-_cfg.c()*_cfg.c()/2/alpha)/(2*alpha*sqrt(2.0*kPI*alpha));  
-            	//arr = arr / 2.0;         
-            	//blitz::Array<double, 1> tmparr(arr(Range(0, int(Lz/2-1))));
-            	//arr(Range(Lz-1-int(Lz/2-1), Lz-1)) = tmparr.reverse(blitz::firstDim);
-            }
-            
+            z = cos(kPI*i/(Lz-1));        //notice the index is i not j
+            z = 0.5 * (1-z) * (_cfg.c());
+            delta.resize(Lx, Ly, Lz);
+            arr = 1.0/sqrt(2.0*kPI*alpha) * exp(-pow2(z)/2/alpha)/2;// + z*z*exp(-_cfg.c()*_cfg.c()/2/alpha)/(2*alpha*sqrt(2.0*kPI*alpha));  
+            //arr = arr / 2.0;         
+            //blitz::Array<double, 1> tmparr(arr(Range(0, int(Lz/2-1))));
+            //arr(Range(Lz-1-int(Lz/2-1), Lz-1)) = tmparr.reverse(blitz::firstDim);
             for(int k=0; k<Lz; ++k)   delta(all, all, k) = arr(k);
             break;
         }
@@ -710,6 +681,27 @@ void Model_AB_C::init_pattern_field(){
     }
 }
 
+/*void Model_AB_C::input_AField(blitz::Array<double, 3> data) {
+    waa.resize(_cfg.Lx(), _cfg.Ly(), _cfg.Lz());
+    waa = data;
+}
+
+void Model_AB_C::input_BField(blitz::Array<double, 3> data) {
+    wbb.resize(_cfg.Lx(), _cfg.Ly(), _cfg.Lz());
+    wbb = data;
+}
+
+void Model_AB_C::input_CField(blitz::Array<double, 3> data) {
+    wcc.resize(_cfg.Lx(), _cfg.Ly(), _cfg.Lz());
+    wcc = data;
+}*/
+
+/*void Model_AB_C::init_data_field() {
+    wA = new Field("wA", _cfg, waa, lamA);
+    wB = new Field("wB", _cfg, wbb, lamB);
+    wC = new Field("wC", _cfg, wcc, lamC);
+}*/
+
 void Model_AB_C::init_field(){
     switch(_cfg.get_grid_init_type()){
         case GridInitType::RANDOM_INIT:
@@ -725,7 +717,6 @@ void Model_AB_C::init_field(){
             init_pattern_field();
             break;
         case GridInitType::DATA_INIT:  // added by songjq for string method in 20161008
-            cout << "Data initialization now!" << endl;
             //init_data_field();
             break;    
         default:
@@ -741,6 +732,7 @@ void Model_AB_C::init_field(){
     uword Lz = _cfg.Lz();
     double ds = 0.3;
     blitz::firstIndex i;
+    blitz::Array<double, 3> wh(Lx, Ly, Lz);
 
     switch (_cfg.dim()) {
         case 1 :
@@ -750,6 +742,8 @@ void Model_AB_C::init_field(){
             x = cos(kPI*i/(Lx-1));
             x = 0.5 * (1-x) * (_cfg.a());
             array = 1.0/ds*exp(-x*x/(2*ds*ds));
+            for(int i=0; i<Lx; ++i)   
+                wh(i, all, all) = array(i);
             break;
         }
         case 2 :
@@ -759,6 +753,8 @@ void Model_AB_C::init_field(){
             y = cos(kPI*i/(Ly-1));
             y = 0.5 * (1-y) * (_cfg.b());
             array = 1.0/ds*exp(-y*y/(2*ds*ds));
+            for(int j=0; j<Ly; ++j)
+                wh(all, j, all) = array(j);
             break;
         }
         case 3 :
@@ -768,12 +764,15 @@ void Model_AB_C::init_field(){
             z = cos(kPI*i/(Lz-1));
             z = 0.5 * (1-z) * (_cfg.c());
             array = 1.0/ds*exp(-z*z/(2*ds*ds));
+            for(int k=0; k<Lz; ++k)
+                wh(all, all, k) = array(k);
             break;
         }
         default :
             cout << "Please input correct dimension !" << endl;
             break;
     }
+    wH = new Field("wH", _cfg, wh, lamA);
     /*********************************************************************/
 }
 
@@ -842,7 +841,7 @@ void Model_AB_C::init_propagator(){
             ppropupB = new Etdrk4_PBC(uc, Lx, Ly, Lz, dsB, _cfg.etdrk4_M());
             ppropupC = new Etdrk4_PBC(uc, Lx, Ly, Lz, dsC, _cfg.etdrk4_M());
             qA = new Propagator("qA", _cfg, sA, dsA, one, ppropupA);
-            qB = new Propagator("qB", _cfg, sB, dsB, ppropupB);
+            qB = new Propagator("qB", _cfg, sA, dsB, ppropupB);
             qC = new Propagator("qC", _cfg, sC, dsC, ppropupC);
             qAc = new Propagator("qAc", _cfg, sA, dsA, ppropupA);
             qBc = new Propagator("qBc", _cfg, sA, dsB, one, ppropupB);
@@ -853,10 +852,10 @@ void Model_AB_C::init_propagator(){
             ppropupB = new PseudoSpectral(uc, Lx, Ly, Lz, dsB);
             ppropupC = new PseudoSpectral(uc, Lx, Ly, Lz, dsC);
             qA = new Propagator("qA", _cfg, sA, dsA, one, ppropupA);
-            qB = new Propagator("qB", _cfg, sB, dsB, ppropupB);
+            qB = new Propagator("qB", _cfg, sA, dsB, ppropupB);
             qC = new Propagator("qC", _cfg, sC, dsC, ppropupC);
             qAc = new Propagator("qAc", _cfg, sA, dsA, ppropupA);
-            qBc = new Propagator("qBc", _cfg, sB, dsB, one, ppropupB);
+            qBc = new Propagator("qBc", _cfg, sA, dsB, one, ppropupB);
             qCc = new Propagator("qCc", _cfg, sC, dsC, one, ppropupC);
         }
         else if(_cfg.algo_mde_type() == AlgorithmMDEType::RQM4){
@@ -864,7 +863,7 @@ void Model_AB_C::init_propagator(){
             ppropupB = new RQM4(uc, Lx, Ly, Lz, dsB);
             ppropupC = new RQM4(uc, Lx, Ly, Lz, dsC);
             qA = new Propagator("qA", _cfg, sA, dsA, one, ppropupA);
-            qB = new Propagator("qB", _cfg, sB, dsB, ppropupB);
+            qB = new Propagator("qB", _cfg, sA, dsB, ppropupB);
             qC = new Propagator("qC", _cfg, sC, dsC, ppropupC);
             qAc = new Propagator("qAc", _cfg, sA, dsA, ppropupA);
             qBc = new Propagator("qBc", _cfg, sB, dsB, one, ppropupB);

@@ -1,0 +1,5 @@
+Program starts at:			Mon Mar 27 20:20:08 2017
+Program terminates at:			Mon Mar 27 20:20:08 2017
+Total time elapsed in second:	0.01
+Total time elapsed in minute:	0.000166667
+Total time elapsed in hour:	2.77778e-06

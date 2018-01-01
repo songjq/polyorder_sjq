@@ -520,8 +520,8 @@ bool scft::save_data(const string s, const int i_save){
     }
 
     // converged but energy is larger than the found minimum energy
-    /*
-    if(_iter > _cfg.min_iter() &&
+    
+    /*if(_iter > _cfg.min_iter() &&
                 i_save>2 && \
                 abs(_H(i_save-1) - _H(i_save-2)) < _cfg.thresh_H() && \
                 _residual_error(i_save) < _cfg.thresh_residual() && \
@@ -530,8 +530,8 @@ bool scft::save_data(const string s, const int i_save){
         save_record(ss.str());
         if(_cfg.is_save_q()) _pmodel->save_q(ss.str());
         return true;
-    }
-    */
+    }*/
+    
 
     // converged
     if(_iter > _cfg.min_iter() && \

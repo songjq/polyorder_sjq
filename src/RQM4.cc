@@ -1,6 +1,7 @@
 #include "RQM4.h"
 #include "UnitCell.h"
 #include "blitz/array.h"
+#include "CMatFile.h"
 
 RQM4::RQM4(const RQM4 &rhs):_laplace(rhs._laplace),_laplace2(rhs._laplace2){
     init_fftw();
