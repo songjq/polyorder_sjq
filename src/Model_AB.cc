@@ -239,20 +239,32 @@ double Model_AB::Hw() const{
             	ret = g.quadrature();
         	}
         }
+    double Eab, Eh, Sab;//AB interaction energy, surface energy associated with dots, enthopy
 
-    Grid g;
+    Grid g; 
     g = chiN * (*phiA) * (*phiB);
     Eab = g.quadrature();
     
     if(is_induced && _cfg.dim() == 2) {
-    	g = - lamH * (*wH) * (*phiA);
+    	Grid g = - lamH * (*wH) * (*phiA);
     	Eh = g.quadrature();
     }
-
-    g = -(*wA) * (*phiA) - (*wB) * (*phiB);
+ 
+    g = -1.0 * (*wA) * (*phiA) - (*wB) * (*phiB);
     Sab = g.quadrature() -log(qB->Qt());
+
+    CMatFile mat;
+    mat.matInit("parts_of_F.mat","u");
+    if(!mat.queryStatus()){
+        mat.matPutScalar("Eab", Eab);
+        if(is_induced && _cfg.dim() == 2) {
+            mat.matPutScalar("Eh", Eh);
+        }
+        mat.matPutScalar("Sab", Sab);
+        mat.matRelease();
     }
 
+    }
     return ret;
 }
 
@@ -443,11 +455,6 @@ void Model_AB::save_density(const string file){
     mat.matInit(file,"u");
     if(!mat.queryStatus()){
         mat.matPutScalar("Q", qB->Qt());
-        mat.matPutScalar("Eab", Eab);
-        if(is_induced && _cfg.dim() == 2) {
-        	mat.matPutScalar("Eh", Eh);
-        }
-        mat.matPutScalar("Sab", Sab);
         mat.matRelease();
     }
 }

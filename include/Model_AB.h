@@ -69,6 +69,8 @@ public:
     void save_density(const string file);
     void save_q(const string file);
 
+    //double Eab, Eh, Sab; //AB interaction energy, surface energy associated with dots, enthopy
+
     ~Model_AB();
 
 private:
@@ -93,7 +95,6 @@ private:
     double lamH;        //strength of the pattern
     arma::uword sA, sB;
     double fA_shiftvalue;  //added by songjq in 20141103
-    double Eab, Eh, Sab; //AB interaction energy, surface energy associated with dots, enthopy
 
     Field *wA, *wB;     // will not be initialized for Anderson mixing
     FieldAX *wAx, *wBx;   // will not be initialized for non-Anderson mixing
